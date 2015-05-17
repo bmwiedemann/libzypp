@@ -128,9 +128,8 @@ namespace zypp
       if ( ! date_r )
 	return "0";
 
-      LocaleGuard guard;
       static char buf[512];
-      if ( ! strftime( buf, 512, format_r.c_str(), (base_r == Date::TB_UTC ? gmtime : localtime)( &date_r ) ) )
+      if ( ! strftime( buf, 512, format_r.c_str(), gmtime( &date_r ) ) )
 	*buf = '\0';
       else
       {
@@ -170,7 +169,6 @@ namespace zypp
   Date::Date( const std::string & date_str, const std::string & format, Date::TimeBase base_r )
     : _date(0)
   {
-    LocaleGuard guard;
 
     struct tm tm = {0,0,0,0,0,0,0,0,0,0,0};
     char * res = ::strptime( date_str.c_str(), format.c_str(), &tm );
@@ -179,7 +177,7 @@ namespace zypp
 
     if ( isDST(tm) )
       tm.tm_isdst = 1;
-    _date = (base_r == TB_UTC ? ::timegm : ::timelocal)( &tm );
+    _date = ::timegm( &tm );
   }
 
   std::string Date::form( const std::string & format_r, Date::TimeBase base_r ) const
