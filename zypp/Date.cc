@@ -26,60 +26,6 @@ namespace zypp
   namespace
   {
     ///////////////////////////////////////////////////////////////////
-    /// \class LocaleGuard
-    /// \brief Temporarily adjust Locale
-    /// \ingroup RAII
-    struct LocaleGuard
-    {
-      LocaleGuard()
-      {
-	const char * tmp = ::setlocale( LC_TIME, NULL );
-	_mylocale = tmp ? tmp : "";
-
-	if ( _mylocale.find( "UTF-8" ) == std::string::npos
-	  && _mylocale.find( "utf-8" ) == std::string::npos
-	  && _mylocale != "POSIX"
-	  && _mylocale != "C"
-	  && _mylocale != "" )
-	{
-	  // language[_territory][.codeset][@modifier]
-	  // add/exchange codeset with UTF-8
-	  std::string needLocale = ".UTF-8";
-	  std::string::size_type loc = _mylocale.find_first_of( ".@" );
-	  if ( loc != std::string::npos )
-	  {
-	    // prepend language[_territory]
-	    needLocale = _mylocale.substr( 0, loc ) + needLocale;
-	    loc = _mylocale.find_last_of( "@" );
-	    if ( loc != std::string::npos )
-	    {
-	      // append [@modifier]
-	      needLocale += _mylocale.substr( loc );
-	    }
-	  }
-	  else
-	  {
-	    // append ".UTF-8"
-	    needLocale = _mylocale + needLocale;
-	  }
-	  ::setlocale( LC_TIME, needLocale.c_str() );
-	}
-	else
-	{
-	  // no need to change the locale
-	  _mylocale.clear();
-	}
-      }
-
-      ~LocaleGuard()
-      {
-	if ( ! _mylocale.empty() )
-	  ::setlocale( LC_TIME, _mylocale.c_str() );
-      }
-    private:
-      std::string _mylocale;
-    };
-    ///////////////////////////////////////////////////////////////////
 
     inline bool isDST( struct tm & tm )
     {
