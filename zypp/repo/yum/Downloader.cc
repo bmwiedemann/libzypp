@@ -201,9 +201,11 @@ namespace yum
   RepoStatus Downloader::status( MediaSetAccess & media_r )
   {
     RepoStatus ret { media_r.provideOptionalFile( repoInfo().path() / "/repodata/repomd.xml" ) };
+    /*
     if ( !ret.empty() )	// else: mandatory master index is missing
       ret = ret && RepoStatus( media_r.provideOptionalFile( "/media.1/media" ) );
     // else: mandatory master index is missing -> stay empty
+    */
     return ret;
   }
 } // namespace yum
