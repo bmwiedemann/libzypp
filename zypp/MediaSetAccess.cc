@@ -183,11 +183,12 @@ IMPL_PTR_TYPE(MediaSetAccess);
   {
     try
     {
-      if ( doesFileExist( file, media_nr ) )
+      //if ( doesFileExist( file, media_nr ) )
+      // handle not-found condition via MediaFileNotFoundException
         return provideFile( OnMediaLocation( file, media_nr ), PROVIDE_NON_INTERACTIVE );
     }
     catch ( const media::MediaFileNotFoundException & excpt_r )
-    { ZYPP_CAUGHT( excpt_r ); }
+    { } // ignore not found
     catch ( const media::MediaForbiddenException & excpt_r )
     { ZYPP_CAUGHT( excpt_r ); }
     catch ( const media::MediaNotAFileException & excpt_r )
