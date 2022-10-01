@@ -700,6 +700,7 @@ multifetchworker::disableCompetition()
 void
 multifetchworker::nextjob()
 {
+  const char *nochunk = getenv("ZYPP_NOCHUNK");
   _noendrange = false;
   if (_request->_stealing)
     {
@@ -708,11 +709,12 @@ multifetchworker::nextjob()
     }
 
   MediaBlockList *blklist = _request->_blklist;
-  if (!blklist)
+  if (nochunk || !blklist)
     {
       _blksize = _request->_defaultBlksize;
       if (_request->_filesize != off_t(-1))
       {
+        if (nochunk) _blksize = _request->_filesize;
         if (_request->_blkoff >= _request->_filesize)
           {
             stealjob();
