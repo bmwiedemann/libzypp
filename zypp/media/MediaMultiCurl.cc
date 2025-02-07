@@ -1754,6 +1754,7 @@ void MediaMultiCurl::multifetch(const Pathname & filename, FILE *fp, std::vector
       _multi = curl_multi_init();
       if (!_multi)
         ZYPP_THROW(MediaCurlInitException(baseurl));
+      curl_multi_setopt( _multi, CURLMOPT_MAXCONNECTS, 25L );
     }
 
   multifetchrequest req(this, filename, baseurl, _multi, fp, report, std::move(blklist), filesize);

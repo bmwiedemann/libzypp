@@ -1428,6 +1428,7 @@ CURLcode MediaCurl::executeCurl() const
 
   if (!cMulti->_multi)
     ZYPP_THROW(MediaCurlInitException(_url));
+  curl_multi_setopt( cMulti->_multi, CURLMOPT_MAXCONNECTS, 25L );
 
   // we could derive from that, but currently that does not make a lot of sense
   internal::CurlPollHelper _curlHelper(cMulti.value());

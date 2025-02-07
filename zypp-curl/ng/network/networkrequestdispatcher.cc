@@ -52,6 +52,7 @@ NetworkRequestDispatcherPrivate::NetworkRequestDispatcherPrivate(  NetworkReques
 {
   ::internal::globalInitCurlOnce();
 
+  curl_multi_setopt( _multi, CURLMOPT_MAXCONNECTS, 25L );
   curl_multi_setopt( _multi, CURLMOPT_TIMERFUNCTION, NetworkRequestDispatcherPrivate::multi_timer_cb );
   curl_multi_setopt( _multi, CURLMOPT_TIMERDATA, reinterpret_cast<void *>( this ) );
   curl_multi_setopt( _multi, CURLMOPT_SOCKETFUNCTION, NetworkRequestDispatcherPrivate::static_socket_callback );
