@@ -143,6 +143,12 @@ namespace zypp
         */
         Repository addRepoSolv( const Pathname & file_r, const RepoInfo & info_r );
 
+        /** Size the pool's id hash tables for the given number of new
+         * string and rel ids that upcoming \ref addRepoSolv calls will
+         * add, to avoid rehashing all interned ids on every growth.
+         */
+        void reserveIds( unsigned numid_r, unsigned numrel_r );
+
       public:
         /** Load \ref Solvables from a helix-file into a \ref Repository named \c name_r.
          * Supports loading of gzip compressed files (.gz). In case of an exception

@@ -182,6 +182,11 @@ namespace zypp
       return reposInsert( systemRepoAlias() );
     }
 
+    void Pool::reserveIds( unsigned numid_r, unsigned numrel_r )
+    {
+      ::pool_reserve_ids( get(), numid_r, numrel_r );
+    }
+
     Repository Pool::addRepoSolv( const Pathname & file_r, const std::string & alias_r )
     {
       // Using a temporay repo! (The additional parenthesis are required.)

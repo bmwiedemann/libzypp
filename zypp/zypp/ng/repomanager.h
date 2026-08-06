@@ -358,6 +358,13 @@ namespace zyppng {
 
     expected<void> loadFromCache( const RepoInfo & info, ProgressObserverRef myProgress = nullptr );
 
+  private:
+    /** Peek at the solv files of all enabled repos and size the pool's
+     * id hashes once for their sum, before the first repo is loaded. */
+    void reservePoolIds();
+
+  public:
+
     expected<RepoInfo> addProbedRepository( RepoInfo info, zypp::repo::RepoType probedType );
 
     expected<void> removeRepository( const RepoInfo & info, ProgressObserverRef myProgress = nullptr );
@@ -504,6 +511,7 @@ namespace zyppng {
     ServiceSet		_services;
     PluginRepoverification _pluginRepoverification;
     zypp::DefaultIntegral<bool,false> _reposDirty;
+    zypp::DefaultIntegral<bool,false> _poolIdsReserved;
   };
 }
 

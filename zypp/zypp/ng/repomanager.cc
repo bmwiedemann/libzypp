@@ -11,6 +11,7 @@
 #include "zypp-core/ExternalProgram.h"
 
 #include <solv/solvversion.h>
+#include <solv/repo_solv.h>
 
 #include <zypp-core/AutoDispose.h>
 #include <zypp-core/base/Regex.h>
@@ -515,6 +516,40 @@ namespace zyppng
   }
 
 
+  void RepoManager::reservePoolIds()
+  {
+    if ( _poolIdsReserved )
+      return;
+    _poolIdsReserved = true;
+    unsigned numid = 0, numrel = 0;
+    for ( const RepoInfo & info : repos() )
+    {
+      if ( ! info.enabled() )
+        continue;
+      zypp::Pathname solvfile;
+      try {
+        solvfile = solv_path_for_repoinfo( _options, info ).unwrap() / "solv";
+      } catch (...) {
+        continue;
+      }
+      FILE * fp = ::fopen( solvfile.c_str(), "re" );
+      if ( ! fp )
+        continue;
+      unsigned nid = 0, nrel = 0;
+      if ( ::solv_read_idcounts( fp, &nid, &nrel ) == 0 )
+      {
+        numid += nid;
+        numrel += nrel;
+      }
+      ::fclose( fp );
+    }
+    if ( numid || numrel )
+    {
+      MIL << "Reserving pool ids for " << numid << " strings, " << numrel << " rels" << std::endl;
+      _zyppContext->satPool().reserveIds( numid, numrel );
+    }
+  }
+
   expected<void> RepoManager::loadFromCache( const RepoInfo & info, ProgressObserverRef myProgress )
   {
     using namespace zyppng::operators;
@@ -523,6 +558,7 @@ namespace zyppng
       ProgressObserver::start( myProgress );
 
       assert_alias(info).unwrap();
+      reservePoolIds();
       zypp::Pathname solvfile = solv_path_for_repoinfo(_options, info).unwrap() / "solv";
 
       if ( ! zypp::PathInfo(solvfile).isExist() )
