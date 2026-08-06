@@ -43,12 +43,12 @@ namespace zypp
       struct timeval tp;
       gettimeofday( &tp, NULL);
 
-      return str::form( "%ld.%ld [%d] <%d> %s(%s):%d %s",
-                        tp.tv_sec,
-                        tp.tv_usec,
+      return str::form( "%lld.%06ld [%d] <%d> [%s] %s(%s):%d %s",
+                        (long long)tp.tv_sec,
+                        (long)tp.tv_usec,
                         level_r,
                         getpid(),
-                        /*group_r.c_str(),*/
+                        group_r.c_str(),
                         file_r, func_r, line_r,
                         message_r.c_str() );
     }
