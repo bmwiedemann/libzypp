@@ -9,6 +9,8 @@
 /** \file	zypp/base/LogControl.cc
  *
 */
+#include <sys/time.h>
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -843,16 +845,22 @@ namespace zypp
                                                   int                 line_r,
                                                   const std::string & message_r )
     {
-      static char hostname[1024];
-      static char nohostname[] = "unknown";
-      std::string now( Date::now().form( "%Y-%m-%d %H:%M:%S" ) );
+      // hostname changes are rare, look it up only once
+      static const char * hostname = []() -> const char * {
+        static char buf[1024];
+        return gethostname( buf, sizeof(buf) ) ? "unknown" : buf;
+      }();
+      struct timeval tp;
+      gettimeofday( &tp, NULL );
+      std::string now( Date( tp.tv_sec ).form( "%Y-%m-%d %H:%M:%S" ) );
+      now += str::form( ".%03ld", (long)(tp.tv_usec / 1000) );
       std::string ret;
 
       const bool logToPPID = LogControlImpl::instanceLogToPPID();
       if ( !logToPPID && LogControlImpl::instanceHideThreadName() )
         ret = str::form( "%s <%d> %s(%d) [%s] %s(%s):%d %s",
                          now.c_str(), level_r,
-                         ( gethostname( hostname, 1024 ) ? nohostname : hostname ),
+                         hostname,
                          getpid(),
                          group_r.c_str(),
                          file_r, func_r, line_r,
@@ -860,7 +868,7 @@ namespace zypp
       else
         ret = str::form( "%s <%d> %s(%d) [%s] %s(%s):%d {T:%s} %s",
                          now.c_str(), level_r,
-                         ( gethostname( hostname, 1024 ) ? nohostname : hostname ),
+                         hostname,
                          logToPPID ? getppid() : getpid(),
                          group_r.c_str(),
                          file_r, func_r, line_r,
