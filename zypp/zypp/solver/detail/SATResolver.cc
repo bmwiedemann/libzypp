@@ -203,12 +203,40 @@ void establish( sat::Queue & pseudoItems_r, sat::Queue & pseudoFlags_r )
       jobQueue.push( solv.id() );
     }
 
-    AutoDispose<sat::detail::CSolver*> cSolver { ::solver_create( cPool ), ::solver_free };
     satPool.prepare();
-    if ( ::solver_solve( cSolver, jobQueue ) != 0 )
-      INT << "How can establish fail?" << endl;
 
-    ::solver_trivial_installable( cSolver, pseudoItems_r, pseudoFlags_r );
+    // This is solver_trivial_installable without the solver: it needs just the
+    // installed packages and the multiversion map, and a solver run without
+    // jobs would only reproduce the set of installed packages anyway. Creating
+    // the package rules and solving them dominates the time to load the pool.
+    ::Map installedmap;
+    ::map_init( &installedmap, cPool->nsolvables );
+    if ( cPool->installed )
+    {
+      Id p;
+      ::Solvable * s;
+      FOR_REPO_SOLVABLES( cPool->installed, p, s )
+        MAPSET( &installedmap, p );
+    }
+
+    ::Map multiversionmap;
+    ::map_init( &multiversionmap, 0 );
+    ::solver_calculate_multiversionmap( cPool, jobQueue, &multiversionmap );
+
+    ::pool_trivial_installable_multiversionmap( cPool, &installedmap, pseudoItems_r, pseudoFlags_r,
+                                                multiversionmap.size ? &multiversionmap : nullptr );
+    for ( sat::Queue::size_type i = 0; i < pseudoFlags_r.size(); ++i )
+    {
+      if ( pseudoFlags_r[i] == -1 )
+        continue;
+      ::Solvable * s { cPool->solvables + pseudoItems_r[i] };
+      if ( ::strncmp( "patch:", ::pool_id2str( cPool, s->name ), 6 ) == 0
+           && ::solvable_is_irrelevant_patch( s, &installedmap ) )
+        pseudoFlags_r[i] = -1;
+    }
+
+    ::map_free( &multiversionmap );
+    ::map_free( &installedmap );
 
     for ( sat::Queue::size_type i = 0; i < pseudoItems_r.size(); ++i )
     {
