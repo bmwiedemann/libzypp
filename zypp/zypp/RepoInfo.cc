@@ -228,7 +228,7 @@ namespace zypp
       if ( !mlurl.asString().empty() ) {
         try {
           DBG << "MetadataPath: " << metadataPath() << endl;
-          repo::RepoMirrorList rmurls( mlurl, metadataPath() );
+          repo::RepoMirrorList rmurls( mlurl, metadataPath(), isAutoMirrorList );
 
           // propagate internally used URL params like 'proxy' to the mirrors
           const auto &tf = [urlTemplate =mirrorListUrl().transformed()]( const zypp::Url &in ){

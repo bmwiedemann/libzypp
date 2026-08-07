@@ -326,7 +326,7 @@ namespace zypp
     } // namespace
     ///////////////////////////////////////////////////////////////////
 
-    RepoMirrorList::RepoMirrorList( const Url & url_r, const Pathname & metadatapath_r )
+    RepoMirrorList::RepoMirrorList( const Url & url_r, const Pathname & metadatapath_r, bool cacheFailure_r )
     {
       PathInfo metaPathInfo( metadatapath_r);
       std::exception_ptr errors; // we collect errors here
@@ -382,25 +382,38 @@ namespace zypp
           }
 
           MIL << "Getting MirrorList from URL: " << url_r << endl;
-          RepoMirrorListTempProvider provider( url_r );	// RAII: lifetime of downloaded file
-          _urls = RepoMirrorListParse( url_r, provider.localfile() );
+          try {
+            RepoMirrorListTempProvider provider( url_r );	// RAII: lifetime of downloaded file
+            _urls = RepoMirrorListParse( url_r, provider.localfile() );
 
-          // removed the && !_urls.empty() condition , we need to remember "no URLs" as well
-          // otherwise RepoInfo keeps spamming the server with requests
-          if ( metaPathInfo.userMayRWX() ) {
-            // Create directory, if not existing
-            DBG << "Copy MirrorList file to " << cachefile << endl;
-            zypp::filesystem::assert_dir( metadatapath_r );
-            if( zypp::filesystem::hardlinkCopy( provider.localfile(), cachefile ) != 0 ) {
-              // remember empty file
-              zypp::filesystem::assert_file( cachefile );
+            // removed the && !_urls.empty() condition , we need to remember "no URLs" as well
+            // otherwise RepoInfo keeps spamming the server with requests
+            if ( metaPathInfo.userMayRWX() ) {
+              // Create directory, if not existing
+              DBG << "Copy MirrorList file to " << cachefile << endl;
+              zypp::filesystem::assert_dir( metadatapath_r );
+              if( zypp::filesystem::hardlinkCopy( provider.localfile(), cachefile ) != 0 ) {
+                // remember empty file
+                zypp::filesystem::assert_file( cachefile );
+              }
+              saveToCookieFile ( cookiefile, url_r );
+              // NOTE: Now we copied the mirrorlist into the metadata directory, but
+              // in case of refresh going on, new metadata are prepared in a sibling
+              // temp dir. Upon success RefreshContext<>::saveToRawCache() exchanges
+              // temp and metadata dirs. There we move an existing mirrorlist file into
+              // the new metadata dir.
             }
-            saveToCookieFile ( cookiefile, url_r );
-            // NOTE: Now we copied the mirrorlist into the metadata directory, but
-            // in case of refresh going on, new metadata are prepared in a sibling
-            // temp dir. Upon success RefreshContext<>::saveToRawCache() exchanges
-            // temp and metadata dirs. There we move an existing mirrorlist file into
-            // the new metadata dir.
+          }
+          catch ( const zypp::Exception & e ) {
+            // An empty cachefile parses as "no mirrors". Without remembering this,
+            // a repo which does not serve a mirrorlist is asked again on every call.
+            if ( cacheFailure_r && metaPathInfo.userMayRWX() ) {
+              MIL << "No mirrorlist for this repo, remembering that in " << cachefile << endl;
+              zypp::filesystem::assert_dir( metadatapath_r );
+              zypp::filesystem::assert_file( cachefile );
+              saveToCookieFile ( cookiefile, url_r );
+            }
+            ZYPP_RETHROW( e );
           }
         }
       } catch ( const zypp::Exception &e ) {

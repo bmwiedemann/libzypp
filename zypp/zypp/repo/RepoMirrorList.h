@@ -22,7 +22,8 @@ namespace zypp
     {
       public:
 
-        RepoMirrorList( const Url & url_r, const Pathname & metadatapath_r );
+        /** \param cacheFailure_r remember a failed download as "no mirrors" */
+        RepoMirrorList( const Url & url_r, const Pathname & metadatapath_r, bool cacheFailure_r = false );
 
         RepoMirrorList( const Url & url_r )
         : RepoMirrorList( url_r, Pathname() )
