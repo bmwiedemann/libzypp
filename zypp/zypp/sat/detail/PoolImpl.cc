@@ -218,6 +218,10 @@ namespace zypp
         // before that, making the next lookup rebuild them for every string.
         ::pool_set_flag( _pool, POOL_FLAG_KEEPIDHASHES, 1 );
 
+        // Unifying the whatprovides data sorts every id that has providers,
+        // which costs more than the few MB of data it saves us.
+        ::pool_set_flag( _pool, POOL_FLAG_NOWHATPROVIDESSHRINK, 1 );
+
         // set namespace callback
         _pool->nscallback = &nsCallback;
         _pool->nscallbackdata = (void*)this;
