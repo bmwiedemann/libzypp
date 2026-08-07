@@ -13,6 +13,7 @@
 #define ZYPP_SAT_POOL_H
 
 #include <iosfwd>
+#include <vector>
 
 #include <zypp-core/Pathname.h>
 
@@ -148,6 +149,26 @@ namespace zypp
          * add, to avoid rehashing all interned ids on every growth.
          */
         void reserveIds( unsigned numid_r, unsigned numrel_r );
+
+        /** \name Experimental whole-pool snapshot (ZYPP_POOL_SNAPSHOT=1).
+         * The snapshot caches the merged pool of all repos, so a zypper
+         * invocation can skip re-interning millions of ids from the
+         * per-repo solv caches. The cookie describes the repo set the
+         * snapshot was made from; \ref mapSnapshot only restores if it
+         * matches \a cookie_r and the pool is still empty.
+         */
+        //@{
+        bool mapSnapshot( const Pathname & path_r, const std::string & cookie_r );
+        bool writeSnapshot( const Pathname & path_r, const std::string & cookie_r ) const;
+        /** Cookie stored in the snapshot, empty if unreadable. */
+        static std::string snapshotCookie( const Pathname & path_r );
+        /** Whether \ref mapSnapshot succeeded in this process. */
+        static bool snapshotMapped();
+        /** Arm snapshot writing: once the pool holds exactly the repos
+         * in \a aliases_r (sorted), \ref detail::PoolImpl::prepare
+         * writes the snapshot if it is missing or stale. */
+        void setSnapshotCandidate( const Pathname & path_r, const std::string & cookie_r, const std::vector<std::string> & aliases_r );
+        //@}
 
       public:
         /** Load \ref Solvables from a helix-file into a \ref Repository named \c name_r.

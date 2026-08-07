@@ -1289,7 +1289,9 @@ namespace zypp
 
       if ( system && ! system.solvablesEmpty() )
       {
-        if ( newCache || force )
+        // a mapped pool snapshot already contains the current system
+        // repo, the cookie asserted the rpmdb cache is unchanged
+        if ( newCache || ( force && ! sat::Pool::snapshotMapped() ) )
         {
           system.eraseFromPool(); // invalidates system
         }

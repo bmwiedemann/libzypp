@@ -21,6 +21,7 @@ extern "C"
 #include <solv/pool_parserpmrichdep.h>
 }
 #include <iosfwd>
+#include <vector>
 
 #include <zypp-core/base/Hash.h>
 #include <zypp-core/base/NonCopyable.h>
@@ -80,6 +81,12 @@ namespace zypp
            * \todo actually requires a watcher.
            */
           void prepare() const;
+
+          /** Experimental pool snapshot (see \ref Pool::mapSnapshot) */
+          bool mapSnapshot( const Pathname & path_r, const std::string & cookie_r );
+          void setSnapshotCandidate( const Pathname & path_r, const std::string & cookie_r, const std::vector<std::string> & aliases_r )
+          { _snapshotPath = path_r; _snapshotCookie = cookie_r; _snapshotAliases = aliases_r; }
+          void snapshotWriteIfNeeded() const;
 
         private:
           /** Invalidate housekeeping data (e.g. whatprovides) if the
@@ -362,6 +369,10 @@ namespace zypp
           CPool * _pool;
           /** Serial number - changes with each Pool content change. */
           SerialNumber _serial;
+          /** Experimental pool snapshot (see \ref Pool::mapSnapshot) */
+          mutable std::string _snapshotCookie;
+          mutable Pathname _snapshotPath;
+          mutable std::vector<std::string> _snapshotAliases;
           /** Serial number of IDs - changes whenever resusePoolIDs==true - ResPool must also invalidate its PoolItems! */
           SerialNumber _serialIDs;
           /** Watch serial number. */

@@ -13,6 +13,9 @@
 #include <solv/solvversion.h>
 #include <solv/repo_solv.h>
 
+#include <algorithm>
+#include <zypp/Digest.h>
+
 #include <zypp-core/AutoDispose.h>
 #include <zypp-core/base/Regex.h>
 #include <zypp-core/fs/PathInfo.h>
@@ -516,6 +519,86 @@ namespace zyppng
   }
 
 
+  namespace {
+    bool poolSnapshotEnabled()
+    {
+      const char * e = ::getenv( "ZYPP_POOL_SNAPSHOT" );
+      return e && *e && strcmp( e, "0" ) != 0;
+    }
+  }
+
+  std::string RepoManager::poolSnapshotCookie() const
+  {
+    // hash over the sorted aliases and their solv cookie files: any
+    // refresh or change of the repo set invalidates the snapshot,
+    // as does a libsolv or architecture change
+    std::vector<std::string> aliases;
+    std::vector<zypp::Pathname> cookiefiles;
+    for ( const RepoInfo & info : repos() )
+    {
+      if ( ! info.enabled() )
+        continue;
+      try {
+        cookiefiles.push_back( solv_path_for_repoinfo( _options, info ).unwrap() / "cookie" );
+        aliases.push_back( info.alias() );
+      } catch (...) {
+        return std::string();
+      }
+    }
+    aliases.push_back( "@System" );
+    cookiefiles.push_back( _options.repoSolvCachePath / "@System" / "cookie" );
+    // sort both by alias
+    std::vector<size_t> idx( aliases.size() );
+    for ( size_t n = 0; n < idx.size(); n++ ) idx[n] = n;
+    std::sort( idx.begin(), idx.end(), [&]( size_t a, size_t b ){ return aliases[a] < aliases[b]; } );
+
+    zypp::Digest dig;
+    if ( ! dig.create( "sha256" ) )
+      return std::string();
+    static const char version[] = LIBSOLV_TOOLVERSION " " LIBSOLV_VERSION_STRING;
+    dig.update( version, sizeof(version) );
+    const std::string & arch { zypp::ZConfig::instance().systemArchitecture().asString() };
+    dig.update( arch.c_str(), arch.size() );
+    for ( size_t n : idx )
+    {
+      std::ifstream is( cookiefiles[n].c_str() );
+      std::string content { std::istreambuf_iterator<char>(is), std::istreambuf_iterator<char>() };
+      if ( content.empty() )
+      {
+        if ( aliases[n] == "@System" )
+          continue;	// no target cache yet
+        return std::string();	// repo without cookie, e.g. temporary
+      }
+      dig.update( aliases[n].c_str(), aliases[n].size() + 1 );
+      dig.update( content.c_str(), content.size() );
+    }
+    return dig.digest();
+  }
+
+  bool RepoManager::tryLoadPoolSnapshot()
+  {
+    if ( _poolSnapshotState )
+      return _poolSnapshotState > 0;
+    _poolSnapshotState = -1;
+    if ( ! poolSnapshotEnabled() )
+      return false;
+    std::string cookie { poolSnapshotCookie() };
+    if ( cookie.empty() )
+      return false;
+    zypp::Pathname path { _options.repoCachePath / "pool.snapshot" };
+    std::vector<std::string> aliases;
+    for ( const RepoInfo & info : repos() )
+      if ( info.enabled() )
+        aliases.push_back( info.alias() );
+    aliases.push_back( "@System" );
+    std::sort( aliases.begin(), aliases.end() );
+    auto pool { _zyppContext->satPool() };
+    pool.setSnapshotCandidate( path, cookie, aliases );	// arm writing after a normal load
+    if ( pool.mapSnapshot( path, cookie ) )
+      _poolSnapshotState = 1;
+    return _poolSnapshotState > 0;
+  }
+
   void RepoManager::reservePoolIds()
   {
     if ( _poolIdsReserved )
@@ -558,6 +641,20 @@ namespace zyppng
       ProgressObserver::start( myProgress );
 
       assert_alias(info).unwrap();
+
+      if ( tryLoadPoolSnapshot() )
+      {
+        zypp::Repository repo = _zyppContext->satPool().reposFind( info.alias() );
+        if ( repo )
+        {
+          MIL << "Repo " << info.alias() << " provided by the pool snapshot" << std::endl;
+          repo.setInfo( info );
+          ProgressObserver::increase( myProgress );
+          ProgressObserver::increase( myProgress );
+          return;
+        }
+      }
+
       reservePoolIds();
       zypp::Pathname solvfile = solv_path_for_repoinfo(_options, info).unwrap() / "solv";
 

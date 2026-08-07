@@ -16,6 +16,7 @@
 extern "C"
 {
 #include <solv/pool.h>
+#include <solv/pool_snapshot.h>
 #include <solv/repo.h>
 #include <solv/solvable.h>
 }
@@ -185,6 +186,59 @@ namespace zypp
     void Pool::reserveIds( unsigned numid_r, unsigned numrel_r )
     {
       ::pool_reserve_ids( get(), numid_r, numrel_r );
+    }
+
+    namespace { bool & snapshotMappedFlag() { static bool _f = false; return _f; } }
+
+    bool Pool::snapshotMapped()
+    { return snapshotMappedFlag(); }
+
+    void Pool::setSnapshotCandidate( const Pathname & path_r, const std::string & cookie_r, const std::vector<std::string> & aliases_r )
+    { myPool().setSnapshotCandidate( path_r, cookie_r, aliases_r ); }
+
+    std::string Pool::snapshotCookie( const Pathname & path_r )
+    {
+      AutoFILE fp { ::fopen( path_r.c_str(), "re" ) };
+      if ( !fp )
+        return std::string();
+      unsigned char buf[4096];
+      unsigned int len = sizeof(buf);
+      if ( ::pool_snapshot_read_cookie( fp, buf, &len ) != 0 )
+        return std::string();
+      return std::string( reinterpret_cast<char*>(buf), len );
+    }
+
+    bool Pool::mapSnapshot( const Pathname & path_r, const std::string & cookie_r )
+    {
+      if ( cookie_r.empty() )
+        return false;
+      if ( ! myPool().mapSnapshot( path_r, cookie_r ) )
+        return false;
+      snapshotMappedFlag() = true;
+      return true;
+    }
+
+    bool Pool::writeSnapshot( const Pathname & path_r, const std::string & cookie_r ) const
+    {
+      Pathname tmp( path_r.extend( ".new" ) );
+      AutoFILE fp { ::fopen( tmp.c_str(), "we" ) };
+      if ( !fp )
+        return false;
+      if ( ::pool_snapshot_write( get(), fp, reinterpret_cast<const unsigned char*>(cookie_r.data()), cookie_r.size() ) != 0
+        || ::fflush( fp ) != 0 )
+      {
+        ::unlink( tmp.c_str() );
+        return false;
+      }
+      ::fchmod( ::fileno( fp ), 0644 );
+      fp.reset();
+      if ( ::rename( tmp.c_str(), path_r.c_str() ) != 0 )
+      {
+        ::unlink( tmp.c_str() );
+        return false;
+      }
+      MIL << "Wrote pool snapshot " << path_r << endl;
+      return true;
     }
 
     Repository Pool::addRepoSolv( const Pathname & file_r, const std::string & alias_r )

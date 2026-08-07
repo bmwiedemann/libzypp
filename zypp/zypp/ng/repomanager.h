@@ -363,6 +363,14 @@ namespace zyppng {
      * id hashes once for their sum, before the first repo is loaded. */
     void reservePoolIds();
 
+    /** Cookie describing the enabled repos and their solv caches,
+     * empty if the pool snapshot cannot be used. */
+    std::string poolSnapshotCookie() const;
+
+    /** Try to map the pool snapshot on the first \ref loadFromCache,
+     * and arm writing a fresh one after a normal load. */
+    bool tryLoadPoolSnapshot();
+
   public:
 
     expected<RepoInfo> addProbedRepository( RepoInfo info, zypp::repo::RepoType probedType );
@@ -512,6 +520,7 @@ namespace zyppng {
     PluginRepoverification _pluginRepoverification;
     zypp::DefaultIntegral<bool,false> _reposDirty;
     zypp::DefaultIntegral<bool,false> _poolIdsReserved;
+    int _poolSnapshotState = 0;	///< 0 unknown, 1 mapped, -1 unusable
   };
 }
 

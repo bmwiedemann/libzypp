@@ -9,6 +9,7 @@
 /** \file	zypp/sat/detail/PoolImpl.cc
  *
 */
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <boost/mpl/int.hpp>
@@ -26,6 +27,11 @@
 #include <zypp/ZConfig.h>
 
 #include <zypp/ng/sat/stringpool.h>
+extern "C"
+{
+#include <solv/pool_snapshot.h>
+}
+#include <zypp-core/AutoDispose.h>
 #include <zypp/sat/detail/PoolImpl.h>
 #include <zypp/sat/SolvableSet.h>
 #include <zypp/sat/Pool.h>
@@ -280,6 +286,64 @@ namespace zypp
         ::pool_freewhatprovides( _pool );
       }
 
+      bool PoolImpl::mapSnapshot( const Pathname & path_r, const std::string & cookie_r )
+      {
+        AutoFILE fp { ::fopen( path_r.c_str(), "re" ) };
+        if ( !fp )
+          return false;
+        unsigned char buf[4096];
+        unsigned int len = sizeof(buf);
+        if ( ::pool_snapshot_read_cookie( fp, buf, &len ) != 0
+          || cookie_r != std::string( reinterpret_cast<char*>(buf), len ) )
+        {
+          MIL << "Pool snapshot " << path_r << " is stale" << endl;
+          return false;
+        }
+        if ( ::pool_snapshot_map( _pool, fp ) != 0 )
+        {
+          WAR << "Pool snapshot " << path_r << " failed to map" << endl;
+          return false;
+        }
+        MIL << "Mapped pool snapshot " << path_r << endl;
+        {
+          // wire up the system repo like _createRepo would
+          CPool * pool = _pool;
+          ::Repo * repo;
+          int i;
+          FOR_REPOS( i, repo )
+            if ( repo->name && systemRepoAlias() == repo->name )
+              ::pool_set_installed( _pool, repo );
+        }
+        setDirty( "mapSnapshot", path_r.c_str() );
+        return true;
+      }
+
+      void PoolImpl::snapshotWriteIfNeeded() const
+      {
+        if ( _snapshotCookie.empty() || Pool::snapshotMapped() )
+          return;
+        // the pool must contain exactly the repo set the cookie was
+        // computed for, e.g. no temporary cli repos
+        std::vector<std::string> aliases;
+        CPool * pool = _pool;
+        ::Repo * repo;
+        int i;
+        FOR_REPOS( i, repo )
+          aliases.push_back( repo->name ? repo->name : "" );
+        std::sort( aliases.begin(), aliases.end() );
+        if ( aliases != _snapshotAliases )
+        {
+          MIL << "Not writing pool snapshot: pool does not match the known repos" << endl;
+          _snapshotCookie.clear();
+          return;
+        }
+        // no staleness check: reaching this point means the snapshot
+        // was not mapped although the repo set qualifies, e.g. it is
+        // missing, stale, or a referenced solv file changed
+        Pool::instance().writeSnapshot( _snapshotPath, _snapshotCookie );
+        _snapshotCookie.clear();	// once per process
+      }
+
       void PoolImpl::prepare() const
       {
         // additional /etc/sysconfig/storage check:
@@ -299,8 +363,10 @@ namespace zypp
         {
           MIL << "pool_createwhatprovides..." << endl;
 
-          ::pool_addfileprovides( _pool );
+          if ( ! Pool::snapshotMapped() )	// a mapped snapshot already contains them
+            ::pool_addfileprovides( _pool );
           ::pool_createwhatprovides( _pool );
+          snapshotWriteIfNeeded();
         }
         if ( ! _pool->languages )
         {
