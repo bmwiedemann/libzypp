@@ -1287,13 +1287,19 @@ namespace zypp
       // Providing an empty system repo, unload any old content
       Repository system( sat::Pool::instance().findSystemRepo() );
 
+      bool systemFromSnapshot = false;
       if ( system && ! system.solvablesEmpty() )
       {
-        // a mapped pool snapshot already contains the current system
-        // repo, the cookie asserted the rpmdb cache is unchanged
         if ( newCache || ( force && ! sat::Pool::snapshotMapped() ) )
         {
           system.eraseFromPool(); // invalidates system
+        }
+        else if ( ! _loaded )
+        {
+          // A mapped pool snapshot supplied the system repo and its cookie
+          // asserted the rpmdb cache is unchanged, so there is nothing to
+          // read. The settings below must still be applied to it.
+          systemFromSnapshot = true;
         }
         else
         {
@@ -1306,19 +1312,22 @@ namespace zypp
         system = satpool.systemRepo();
       }
 
-      try
+      if ( ! systemFromSnapshot )
       {
-        MIL << "adding " << rpmsolv << " to system" << endl;
-        system.addSolv( rpmsolv );
-      }
-      catch ( const Exception & exp )
-      {
-        ZYPP_CAUGHT( exp );
-        MIL << "Try to handle exception by rebuilding the solv-file" << endl;
-        clearCache();
-        buildCache();
+        try
+        {
+          MIL << "adding " << rpmsolv << " to system" << endl;
+          system.addSolv( rpmsolv );
+        }
+        catch ( const Exception & exp )
+        {
+          ZYPP_CAUGHT( exp );
+          MIL << "Try to handle exception by rebuilding the solv-file" << endl;
+          clearCache();
+          buildCache();
 
-        system.addSolv( rpmsolv );
+          system.addSolv( rpmsolv );
+        }
       }
       satpool.rootDir( _root );
 
@@ -1403,6 +1412,7 @@ namespace zypp
       // now that the target is loaded, we can cache the flavor
       createLastDistributionFlavorCache();
 
+      _loaded = true;
       MIL << "Target loaded: " << system.solvablesSize() << " resolvables" << endl;
     }
 

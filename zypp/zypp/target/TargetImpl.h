@@ -227,6 +227,7 @@ namespace zypp
       RequestedLocalesFile _requestedLocalesFile;
       /** user/auto installed database */
       SolvIdentFile _autoInstalledFile;
+      bool _loaded = false;	//< whether \ref load already applied the target settings
       /** Hard-Locks database */
       HardLocksFile _hardLocksFile;
       /** Cache distributionVersion */
