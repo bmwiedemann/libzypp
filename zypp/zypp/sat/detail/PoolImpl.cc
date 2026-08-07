@@ -213,6 +213,11 @@ namespace zypp
 
         ::pool_setdebugcallback( _pool, logSat, NULL );
 
+        // We keep interning ids after the pool is built (locales, queries,
+        // PoolItems), and pool_createwhatprovides would drop the hashes just
+        // before that, making the next lookup rebuild them for every string.
+        ::pool_set_flag( _pool, POOL_FLAG_KEEPIDHASHES, 1 );
+
         // set namespace callback
         _pool->nscallback = &nsCallback;
         _pool->nscallbackdata = (void*)this;
