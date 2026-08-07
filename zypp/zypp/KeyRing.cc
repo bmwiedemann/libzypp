@@ -186,6 +186,9 @@ namespace zypp
   void KeyRing::allowPreload( bool yesno_r )
   { _pimpl->allowPreload( yesno_r ); }
 
+  void KeyRing::setTrustedKeyRingInit( std::function<void()> init_r )
+  { _pimpl->setTrustedKeyRingInit( std::move(init_r) ); }
+
 
   void KeyRing::importKey( const PublicKey & key, bool trusted )
   { _pimpl->importKey( key, Ring(trusted) ); }

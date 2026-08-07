@@ -272,6 +272,16 @@ RpmDb::db_const_iterator RpmDb::dbConstIterator() const
   return db_const_iterator();
 }
 
+namespace
+{
+  /** Arm (or with nullptr disarm) the on demand trusted keyring sync. */
+  void deferTrustedKeySync( std::function<void()> init_r )
+  {
+    if ( ZYppFactory::instance().haveZYpp() )
+      getZYpp()->keyRing()->setTrustedKeyRingInit( std::move(init_r) );
+  }
+}
+
 ///////////////////////////////////////////////////////////////////
 //
 //
@@ -331,8 +341,8 @@ void RpmDb::initDatabase( Pathname root_r, bool doRebuild_r )
   if ( doRebuild_r )
     rebuildDatabase();
 
-  MIL << "Synchronizing keys with zypp keyring" << endl;
-  syncTrustedKeys();
+  MIL << "Sync keys with zypp keyring on first use" << endl;
+  deferTrustedKeySync( [this](){ syncTrustedKeys(); } );
 
 #if 0 // if this is needed we need to forcefully close the db of running db_const_iterators
   // Close the database in case any write acces (create/convert)
@@ -361,6 +371,7 @@ void RpmDb::closeDatabase()
   // Running db_const_iterator may keep the DB physically open until they
   // go out of scope too.
   MIL << "closeDatabase: " << *this << endl;
+  deferTrustedKeySync( nullptr );	// the pending sync would use this closed database
   _root = _dbPath = Pathname();
 }
 
@@ -572,6 +583,7 @@ namespace
 void RpmDb::syncTrustedKeys( SyncTrustedKeyBits mode_r )
 {
   MIL << "Going to sync trusted keys..." << endl;
+  deferTrustedKeySync( nullptr );
   std::set<Edition> rpmKeys( pubkeyEditions() );
   std::list<PublicKeyData> zyppKeys( getZYpp()->keyRing()->trustedPublicKeyData() );
 

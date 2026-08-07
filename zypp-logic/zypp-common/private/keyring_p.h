@@ -17,6 +17,7 @@
 #include <zypp-core/fs/WatchFile>
 #include <zypp-common/KeyManager.h>
 #include <zypp-core/ng/pipelines/expected.h>
+#include <functional>
 #include <optional>
 
 namespace zypp {
@@ -108,6 +109,9 @@ namespace zypp {
       void allowPreload( bool yesno_r ) //< General keyring may be preloaded with keys cached on the system.
       { _allowPreload = yesno_r; }
 
+      void setTrustedKeyRingInit( std::function<void()> init_r ) //< Executed on first use of the trusted keyring.
+      { _trustedRingInit = std::move(init_r); }
+
       /** Import PublicKeys into a Ring.
        * Beware that a \ref PublicKey constructed from a file may in fact hold
        * multiple keys (\see \ref PublicKey::hiddenKeys)
@@ -180,7 +184,19 @@ namespace zypp {
 
     private:
       const Pathname keyRingPath( const Ring ring ) const
-      { return ring == Ring::General ? _general_tmp_dir.path() : _trusted_tmp_dir.path(); }
+      {
+        if ( ring == Ring::General )
+          return _general_tmp_dir.path();
+        if ( _trustedRingInit ) {
+          // Reset before executing: the initializer populates the ring and
+          // will ask for this path again.
+          KeyRingImpl * lazyinit = const_cast<KeyRingImpl*>(this);
+          std::function<void()> init;
+          init.swap( lazyinit->_trustedRingInit );
+          init();
+        }
+        return _trusted_tmp_dir.path();
+      }
 
       void importKey( const Pathname & keyfile, const Pathname & keyring );
 
@@ -222,6 +238,7 @@ namespace zypp {
       filesystem::TmpDir _general_tmp_dir;
       Pathname _base_dir;
       bool _allowPreload = false;	//< General keyring may be preloaded with keys cached on the system.
+      std::function<void()> _trustedRingInit;	//< Executed on first use of the trusted keyring.
 
       /** Functor returning the keyrings data (cached).
        * \code

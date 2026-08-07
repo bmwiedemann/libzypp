@@ -13,6 +13,7 @@
 #define ZYPP_KEYRING_H
 
 #include <iosfwd>
+#include <functional>
 #include <map>
 #include <list>
 #include <set>
@@ -302,6 +303,12 @@ namespace zypp
   public:
     /** The general keyring may be populated with known keys stored on the system. */
     void allowPreload( bool yesno_r );
+
+    /** Populate the trusted keyring on demand by \a init_r (nullptr to unset).
+     * Building the trusted keyring executes gpg, so commands which never look
+     * at it should not pay for it.
+     */
+    void setTrustedKeyRingInit( std::function<void()> init_r );
 
   private:
     /** Pointer to implementation */
