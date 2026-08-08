@@ -104,8 +104,41 @@ namespace zypp
 
     Impl( ResPool &&pool_r, const pool::PoolImpl & poolImpl_r )
     : _pool( std::move(pool_r) )
+    , _id2item( &poolImpl_r.id2item() )
+    , _serial( poolImpl_r.serial().serial() )
+    {}
+
+  public:
+    ui::Selectable::Ptr lookup( const pool::ByIdent & ident_r ) const
     {
-      const pool::PoolImpl::Id2ItemT & id2item( poolImpl_r.id2item() );
+      SelectableIndex::const_iterator it( _selIndex.find( ident_r.get() ) );
+      if ( it != _selIndex.end() )
+        return it->second;
+      if ( _id2item && _pool.serial().serial() == _serial )
+      {
+        // create just this Selectable; a single lookup does not
+        // have to pay for materializing the whole pool
+        auto range = _id2item->equal_range( ident_r.get() );
+        if ( range.first != range.second )
+        {
+          ui::Selectable::Ptr p( makeSelectablePtr( range.first, range.second ) );
+          _selPool.insert( SelectablePool::value_type( p->kind(), p ) );
+          _selIndex[ident_r.get()] = p;
+          return p;
+        }
+      }
+      return ui::Selectable::Ptr();
+    }
+
+  private:
+    void materialize() const
+    {
+      if ( ! _id2item )
+        return;
+      const pool::PoolImpl::Id2ItemT & id2item( *_id2item );
+      _id2item = nullptr;
+      if ( _pool.serial().serial() != _serial )
+        return;
       if ( ! id2item.empty() )
       {
         // set startpoint
@@ -116,54 +149,51 @@ namespace zypp
           if ( it->first != cbegin->first )
           {
             // starting a new Selectable, create the previous one
-            ui::Selectable::Ptr p( makeSelectablePtr( cbegin, it ) );
-            _selPool.insert( SelectablePool::value_type( p->kind(), p ) );
-            _selIndex[cbegin->first] = p;
+            if ( ! _selIndex.count( cbegin->first ) )
+            {
+              ui::Selectable::Ptr p( makeSelectablePtr( cbegin, it ) );
+              _selPool.insert( SelectablePool::value_type( p->kind(), p ) );
+              _selIndex[cbegin->first] = p;
+            }
             // remember new startpoint
             cbegin = it;
           }
         }
         // create the final one
-        ui::Selectable::Ptr p( makeSelectablePtr( cbegin, id2item.end() ) );
-        _selPool.insert( SelectablePool::value_type( p->kind(), p ) );
-        _selIndex[cbegin->first] = p;
+        if ( ! _selIndex.count( cbegin->first ) )
+        {
+          ui::Selectable::Ptr p( makeSelectablePtr( cbegin, id2item.end() ) );
+          _selPool.insert( SelectablePool::value_type( p->kind(), p ) );
+          _selIndex[cbegin->first] = p;
+        }
       }
     }
 
   public:
-    ui::Selectable::Ptr lookup( const pool::ByIdent & ident_r ) const
-    {
-      SelectableIndex::const_iterator it( _selIndex.find( ident_r.get() ) );
-      if ( it != _selIndex.end() )
-        return it->second;
-      return ui::Selectable::Ptr();
-    }
-
-  public:
     bool empty() const
-    { return _selPool.empty(); }
+    { materialize(); return _selPool.empty(); }
 
     size_type size() const
-    { return _selPool.size(); }
+    { materialize(); return _selPool.size(); }
 
     const_iterator begin() const
-    { return make_map_value_begin( _selPool ); }
+    { materialize(); return make_map_value_begin( _selPool ); }
 
     const_iterator end() const
-    { return make_map_value_end( _selPool ); }
+    { materialize(); return make_map_value_end( _selPool ); }
 
   public:
     bool empty( const ResKind & kind_r ) const
-    { return( _selPool.count( kind_r ) == 0 );  }
+    { materialize(); return( _selPool.count( kind_r ) == 0 );  }
 
     size_type size( const ResKind & kind_r ) const
-    { return _selPool.count( kind_r ); }
+    { materialize(); return _selPool.count( kind_r ); }
 
     const_iterator byKindBegin( const ResKind & kind_r ) const
-    { return make_map_value_lower_bound( _selPool, kind_r ); }
+    { materialize(); return make_map_value_lower_bound( _selPool, kind_r ); }
 
     const_iterator byKindEnd( const ResKind & kind_r ) const
-    { return make_map_value_upper_bound( _selPool, kind_r ); }
+    { materialize(); return make_map_value_upper_bound( _selPool, kind_r ); }
 
   public:
     size_type knownRepositoriesSize() const
@@ -197,6 +227,8 @@ namespace zypp
 
   private:
     ResPool _pool;
+    mutable const pool::PoolImpl::Id2ItemT * _id2item = nullptr;	//< unmaterialized idents, guarded by _serial
+    unsigned _serial = 0;
     mutable SelectablePool _selPool;
     mutable SelectableIndex _selIndex;
 
