@@ -69,6 +69,13 @@ namespace zypp
       const char * envp = getenv("LIBSOLV_DEBUGMASK");
       return envp ? str::strtonum<int>( envp ) : 0;
     }
+
+    /** Same gate as RepoManager::poolSnapshotEnabled */
+    inline bool ZYPP_POOL_SNAPSHOT()
+    {
+      const char * envp = getenv("ZYPP_POOL_SNAPSHOT");
+      return envp && *envp && strcmp( envp, "0" ) != 0;
+    }
   } // namespace env
   ///////////////////////////////////////////////////////////////////
   namespace sat
@@ -219,8 +226,12 @@ namespace zypp
         ::pool_set_flag( _pool, POOL_FLAG_KEEPIDHASHES, 1 );
 
         // Unifying the whatprovides data sorts every id that has providers,
-        // which costs more than the few MB of data it saves us.
-        ::pool_set_flag( _pool, POOL_FLAG_NOWHATPROVIDESSHRINK, 1 );
+        // which costs more than the few MB of data it saves us. With the
+        // pool snapshot the trade turns around: the index is stored in and
+        // restored from the snapshot, so the writer pays the sort once and
+        // every mapped run copies an eightfold smaller index.
+        if ( ! env::ZYPP_POOL_SNAPSHOT() )
+          ::pool_set_flag( _pool, POOL_FLAG_NOWHATPROVIDESSHRINK, 1 );
 
         // set namespace callback
         _pool->nscallback = &nsCallback;
@@ -308,6 +319,9 @@ namespace zypp
           MIL << "Pool snapshot " << path_r << " is stale" << endl;
           return false;
         }
+        // Invalidate before mapping: afterwards it would free the
+        // whatprovides index restored from the snapshot.
+        setDirty( "mapSnapshot", path_r.c_str() );
         if ( ::pool_snapshot_map( _pool, fp ) != 0 )
         {
           WAR << "Pool snapshot " << path_r << " failed to map" << endl;
@@ -315,7 +329,8 @@ namespace zypp
         }
         MIL << "Mapped pool snapshot " << path_r << endl;
         {
-          // wire up the system repo like _createRepo would
+          // wire up the system repo like _createRepo would; a no-op
+          // where the snapshot already restored pool->installed
           CPool * pool = _pool;
           ::Repo * repo;
           int i;
@@ -323,7 +338,6 @@ namespace zypp
             if ( repo->name && systemRepoAlias() == repo->name )
               ::pool_set_installed( _pool, repo );
         }
-        setDirty( "mapSnapshot", path_r.c_str() );
         return true;
       }
 
