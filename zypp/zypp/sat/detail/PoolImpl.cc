@@ -70,11 +70,12 @@ namespace zypp
       return envp ? str::strtonum<int>( envp ) : 0;
     }
 
-    /** Same gate as RepoManager::poolSnapshotEnabled */
+    /** Same gate as RepoManager::poolSnapshotEnabled.
+     * On by default; ZYPP_POOL_SNAPSHOT=0 disables. */
     inline bool ZYPP_POOL_SNAPSHOT()
     {
       const char * envp = getenv("ZYPP_POOL_SNAPSHOT");
-      return envp && *envp && strcmp( envp, "0" ) != 0;
+      return !( envp && strcmp( envp, "0" ) == 0 );
     }
   } // namespace env
   ///////////////////////////////////////////////////////////////////
@@ -322,7 +323,18 @@ namespace zypp
         // Invalidate before mapping: afterwards it would free the
         // whatprovides index restored from the snapshot.
         setDirty( "mapSnapshot", path_r.c_str() );
-        if ( ::pool_snapshot_map( _pool, fp ) != 0 )
+        int res = ::pool_snapshot_map( _pool, fp );
+        if ( res == -2 )
+        {
+          // Another client's pre-load interned ids differ from ours.
+          // The file is fine for that client: fall back, but do not
+          // rewrite it, or the two of us would take turns clobbering
+          // each other's snapshot on every run.
+          MIL << "Pool snapshot " << path_r << " belongs to a different client, not replacing it" << endl;
+          _snapshotCookie.clear();
+          return false;
+        }
+        if ( res != 0 )
         {
           WAR << "Pool snapshot " << path_r << " failed to map" << endl;
           return false;

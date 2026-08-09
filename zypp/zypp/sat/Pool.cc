@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 extern "C"
 {
@@ -25,6 +26,7 @@ extern "C"
 #include <fstream>
 
 #include <zypp-core/base/Easy.h>
+#include <zypp-core/base/String.h>
 #include <zypp-core/base/Logger.h>
 #include <zypp-core/base/Gettext.h>
 #include <zypp-core/base/Exception.h>
@@ -220,7 +222,10 @@ namespace zypp
 
     bool Pool::writeSnapshot( const Pathname & path_r, const std::string & cookie_r ) const
     {
-      Pathname tmp( path_r.extend( ".new" ) );
+      // pid-unique tempname: concurrent writers must not interleave
+    // into the same file, and the final file may only ever appear
+    // via rename (live readers borrow pages from it)
+    Pathname tmp( path_r.extend( ".new." + str::numstring( getpid() ) ) );
       AutoFILE fp { ::fopen( tmp.c_str(), "we" ) };
       if ( !fp )
         return false;

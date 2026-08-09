@@ -520,10 +520,11 @@ namespace zyppng
 
 
   namespace {
+    // On by default; ZYPP_POOL_SNAPSHOT=0 disables.
     bool poolSnapshotEnabled()
     {
       const char * e = ::getenv( "ZYPP_POOL_SNAPSHOT" );
-      return e && *e && strcmp( e, "0" ) != 0;
+      return !( e && strcmp( e, "0" ) == 0 );
     }
   }
 
