@@ -336,7 +336,27 @@ namespace zypp
           int i;
           FOR_REPOS( i, repo )
             if ( repo->name && systemRepoAlias() == repo->name )
+            {
               ::pool_set_installed( _pool, repo );
+              // autoprovide the dummy RepoInfo Pool::reposInsert would
+              // have attached when creating the system repo; assigned
+              // directly as setRepoInfo's priority sync might setDirty,
+              // freeing the whatprovides index just restored
+              RepoInfo info;
+              info.setAlias( systemRepoAlias() );
+              info.setName( systemRepoAlias() );
+              info.setAutorefresh( true );
+              info.setEnabled( true );
+              _repoinfos[repo] = info;
+            }
+          // The application claims the repos it wants via setRepoInfo;
+          // whatever stays unclaimed is erased in prepare(). Otherwise
+          // e.g. 'zypper --repo foo' would silently operate on the
+          // whole snapshot instead of just foo.
+          _snapshotUnclaimed.clear();
+          FOR_REPOS( i, repo )
+            if ( repo != pool->installed )
+              _snapshotUnclaimed.insert( repo );
         }
         return true;
       }
@@ -369,6 +389,19 @@ namespace zypp
 
       void PoolImpl::prepare() const
       {
+        if ( ! _snapshotUnclaimed.empty() )
+        {
+          // Snapshot repos the application never claimed in this run
+          // (e.g. zypper --repo limits the repo set): erase them so the
+          // pool matches what was actually requested.
+          std::set<RepoIdType> unclaimed;
+          unclaimed.swap( _snapshotUnclaimed );
+          for ( CRepo * repo : unclaimed )
+          {
+            MIL << "Erase unclaimed snapshot repo " << ( repo->name ? repo->name : "" ) << endl;
+            const_cast<PoolImpl*>(this)->_deleteRepo( repo );
+          }
+        }
         // additional /etc/sysconfig/storage check:
         static WatchFile sysconfigFile( sysconfigStoragePath(), WatchFile::NO_INIT );
         if ( sysconfigFile.hasChanged() )
@@ -412,6 +445,7 @@ namespace zypp
       void PoolImpl::_deleteRepo( CRepo * repo_r )
       {
         setDirty(__FUNCTION__, repo_r->name );
+        _snapshotUnclaimed.erase( repo_r );	// pointer must not dangle
         if ( isSystemRepo( repo_r ) )
           _autoinstalled.clear();
         eraseRepoInfo( repo_r );
@@ -504,6 +538,7 @@ namespace zypp
 
       void PoolImpl::setRepoInfo( RepoIdType id_r, const RepoInfo & info_r )
       {
+        _snapshotUnclaimed.erase( id_r );	// this run wants the repo
         CRepo * repo( getRepo( id_r ) );
         if ( repo )
         {

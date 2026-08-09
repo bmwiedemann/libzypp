@@ -21,6 +21,7 @@ extern "C"
 #include <solv/pool_parserpmrichdep.h>
 }
 #include <iosfwd>
+#include <set>
 #include <vector>
 
 #include <zypp-core/base/Hash.h>
@@ -373,6 +374,8 @@ namespace zypp
           mutable std::string _snapshotCookie;
           mutable Pathname _snapshotPath;
           mutable std::vector<std::string> _snapshotAliases;
+          /** Snapshot repos not (yet) requested via \ref setRepoInfo; erased in \ref prepare. */
+          mutable std::set<RepoIdType> _snapshotUnclaimed;
           /** Serial number of IDs - changes whenever resusePoolIDs==true - ResPool must also invalidate its PoolItems! */
           SerialNumber _serialIDs;
           /** Watch serial number. */
