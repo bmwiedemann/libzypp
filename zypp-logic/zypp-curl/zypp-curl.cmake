@@ -32,6 +32,7 @@ zypp_add_sources( zypp_curl_private_HEADERS
 
 zypp_add_sources( zypp_curl_SRCS
   curlconfig.cc
+  curl_dl.cc
   proxyinfo.cc
   curlhelper.cc
   transfersettings.cc
@@ -176,7 +177,9 @@ endif( ZYPP_CXX_CLANG_TIDY OR ZYPP_CXX_CPPCHECK )
 ADD_LIBRARY( ${arg_TARGETNAME} STATIC ${zypp_curl_lib_SRCS} ${zypp_curl_lib_HEADERS} )
 
 target_link_libraries( ${arg_TARGETNAME} PRIVATE  ${arg_FLAGS} )
-target_link_libraries( ${arg_TARGETNAME} INTERFACE ${CURL_LIBRARIES} )
+# libcurl is dlopen()ed on first use (see curl_dl.cc), keeping its ~30
+# shared objects out of runs that never download anything
+target_link_libraries( ${arg_TARGETNAME} INTERFACE ${CMAKE_DL_LIBS} )
 target_link_libraries( ${arg_TARGETNAME} INTERFACE ${LIBXML2_LIBRARIES} )
 
 IF( NOT DISABLE_LIBPROXY )
